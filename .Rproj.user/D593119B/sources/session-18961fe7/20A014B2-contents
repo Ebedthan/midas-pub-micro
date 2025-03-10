@@ -1,0 +1,504 @@
+# Diversity analysis
+# Author: Anicet Ebou, ediman dot ebou at inphb dot ci
+# Date: Wed Nov 17 2021
+#
+# THIS SCRIPT WAS TESTED ONLY ON LINUX UBUNTU 20.04 and UBUNTU 22.04
+
+# My functions and theme -------------------------------------------------------
+theme_Publication <-
+  function(base_size = 14,
+           base_family = "helvetica") {
+    library(grid)
+    library(ggthemes)
+    library(ggplot2)
+    (
+      ggthemes::theme_foundation(base_size = base_size, base_family = base_family) +
+        ggplot2::theme(
+          plot.title = element_text(
+            face = "bold",
+            size = rel(1.2),
+            hjust = 0.5
+          ),
+          text = element_text(),
+          panel.background = element_rect(colour = NA),
+          plot.background = element_rect(colour = NA),
+          panel.border = element_rect(colour = NA),
+          axis.title = element_text(face = "bold", size = rel(1)),
+          axis.title.y = element_text(angle = 90, vjust = 2),
+          axis.title.x = element_text(vjust = -0.2),
+          axis.text = element_text(),
+          axis.line = element_line(colour = "black"),
+          axis.ticks = element_line(),
+          panel.grid.major = element_line(colour = "#f0f0f0"),
+          panel.grid.minor = element_blank(),
+          legend.key = element_rect(colour = NA),
+          legend.position = "bottom",
+          legend.direction = "horizontal",
+          legend.key.size = unit(0.2, "cm"),
+          legend.margin = margin(t = 0, unit = "cm"),
+          legend.title = element_text(face = "italic"),
+          plot.margin = unit(c(10, 5, 5, 5), "mm"),
+          strip.background = element_rect(colour = "#f0f0f0", fill = "#f0f0f0"),
+          strip.text = element_text(face = "bold")
+        )
+    )
+  }
+
+scale_fill_Publication <- function(...) {
+  library(scales)
+  ggplot2::discrete_scale("fill",
+                          "Publication",
+                          manual_pal(
+                            values = c(
+                              "#386cb0",
+                              "#fdb462",
+                              "#7fc97f",
+                              "#ef3b2c",
+                              "#662506",
+                              "#a6cee3",
+                              "#fb9a99",
+                              "#984ea3",
+                              "#ffff33"
+                            )
+                          ), ...)
+}
+
+scale_colour_Publication <- function(...) {
+  library(scales)
+  ggplot2::discrete_scale("colour",
+                          "Publication",
+                          manual_pal(
+                            values = c(
+                              "#386cb0",
+                              "#fdb462",
+                              "#7fc97f",
+                              "#ef3b2c",
+                              "#662506",
+                              "#a6cee3",
+                              "#fb9a99",
+                              "#984ea3",
+                              "#ffff33"
+                            )
+                          ), ...)
+}
+
+export_plot <- function(myplot, file, width = 8, height = 6, units = "in", type = "tiff", bg = "white") {
+  require(Cairo)
+  require(cli)
+  
+  # Export plot using Cairo
+  Cairo::Cairo(width = width,
+               height = height,
+               file = file,
+               type = type,
+               bg = bg,
+               units = units,
+               dpi = 300)
+  plot(myplot)
+  dev.off()
+  
+  cli::cli_alert_success(paste("Exporting plot to", file, "succeeded"))
+  
+  # Show plot
+  myplot
+}
+
+# Package loading -------------------------
+library(plyr)
+if (!require("tidyverse", character.only = TRUE)) {
+  install.packages("tidyverse")
+  library("tidyverse", character.only = TRUE)
+}
+if (!require("patchwork", character.only = TRUE)) {
+  install.packages("patchwork")
+  library("patchwork", character.only = TRUE)
+}
+if (!require("geosphere", character.only = TRUE)) {
+  install.packages("geosphere")
+  library("geosphere", character.only = TRUE)
+}
+if (!require("vegan", character.only = TRUE)) {
+  install.packages("vegan")
+  library("vegan", character.only = TRUE)
+}
+if (!require("measurements", character.only = TRUE)) {
+  install.packages("measurements")
+  library("measurements", character.only = TRUE)
+}
+if (!require("factoextra", character.only = TRUE)) {
+  install.packages("factoextra")
+  library("factoextra", character.only = TRUE)
+}
+if (!require("here", character.only = TRUE)) {
+  install.packages("here")
+  library("here", character.only = TRUE)
+}
+if (!require("ggsci", character.only = TRUE)) {
+  install.packages("ggsci")
+  library("ggsci", character.only = TRUE)
+}
+if (!require("eulerr", character.only = TRUE)) {
+  install.packages("eulerr")
+  library("eulerr", character.only = TRUE)
+}
+if (!require("scales", character.only = TRUE)) {
+  install.packages("scales")
+  library("scales", character.only = TRUE)
+}
+if (!require("ggcorrplot", character.only = TRUE)) {
+  install.packages("ggcorrplot")
+  library("ggcorrplot", character.only = TRUE)
+}
+if (!require("Boruta", character.only = TRUE)) {
+  install.packages("Boruta")
+  library("Boruta", character.only = TRUE)
+}
+if (!require("ggpubr", character.only = TRUE)) {
+  install.packages("ggpubr")
+  library("ggpubr", character.only = TRUE)
+}
+if (!require("metagMisc", character.only = TRUE)) {
+  devtools::install_github("vmikk/metagMisc")
+  library("metagMisc", character.only = TRUE)
+}
+if (!require("phyloseq", character.only = TRUE)) {
+  if (!require("BiocManager", character.only = TRUE)) {
+    install.packages("BiocManager", character.only = TRUE)
+  }
+  BiocManager::install("phyloseq")
+} 
+if (!require("ggtree", character.only = TRUE)) {
+  if (!require("BiocManager", character.only = TRUE)) {
+    install.packages("BiocManager", character.only = TRUE)
+  }
+  BiocManager::install("ggtree")
+}
+if (!require("microbiome", character.only = TRUE)) {
+  if (!require("BiocManager", character.only = TRUE)) {
+    install.packages("BiocManager", character.only = TRUE)
+  }
+  BiocManager::install("microbiome")
+}
+
+# Analysis of soil physico-chemical and climatic characteristics----------------
+# Principal Component Analysis
+# Get and wrangle data
+all.chem <- read_csv(here::here("01_data", "edaphic_climatic.csv"))
+pca.data <- as.data.frame(all.chem)
+
+rownames(pca.data) <- pca.data$samples
+groups <- as.factor(pca.data$geographic)
+
+pca.data <- pca.data %>% 
+  select(-c(sample_id, pH_general, pH_10_levels, 
+            soil_class, general_texture, samples, 
+            geographic, latitude, longitude))
+
+# Run PCA Analysis
+res.pca <- prcomp(pca.data, scale = TRUE)
+
+# Visualize PCA
+pca.viz <- fviz_pca_biplot(res.pca, habillage = groups,
+                                       geom.ind = c("point"),
+                                       invisible = c("quali"),
+                                       col.var = "grey", pointsize = 2.5) +
+  theme_Publication() + 
+  ggsci::scale_color_lancet() +
+  ggplot2::labs(color = "Geographic location", 
+                shape = "Geographic location", 
+                title = NULL)
+
+# Decay-distance analysis
+samples_dist <- all.chem %>% select(longitude, latitude)
+dists <- distm(samples_dist)
+dists <- conv_unit(dists, "m", "km")
+env_dist <- vegdist(scale(pca.data), method = "euclidean")
+dist_data <- as.data.frame(cbind(as.dist(dists), env_dist))
+names(dist_data) <- c("spatial", "env")
+dfit <- lm(env ~ spatial, data = dist_data)
+
+p1 <- ggplot(dist_data, aes(x = spatial, y = env)) +
+  geom_point(color = "#999999") +
+  xlab("Geographic distance (km)") +
+  ylab("Environmental dissimilarity") +
+  geom_smooth(method = 'lm', se = T) +
+  annotate("text", x = 480, y = 2, label = "r = 0.44, p < 2.2e-16") +
+  theme_Publication()
+
+# Export fig
+p2 <- (pca.viz / p1) + plot_annotation(tag_levels = 'A')
+
+export_plot(p2, here::here("02_output/fig2.tiff"), width = 8, height = 13)
+export_plot(p2, here::here("02_output/fig2.png"), width = 8, height = 13, type = "png")
+
+# Diversity analysis------------------------------------------------------------
+# Phyloseq Import Data
+# Combine data into a phyloseq object
+asv_table <- read_tsv(here::here("01_data", "asv_table.tsv"), col_names = T)
+asv_table <- as.data.frame(asv_table)
+rownames(asv_table) <- asv_table$...1
+asv_table <- asv_table[,-1]
+
+taxo <- read.table(here::here("01_data", "taxonomy.tsv"), header = TRUE, row.names = 1, sep = "\t")
+meta <- all.chem %>% select(sample_id, pH_general, pH_10_levels, 
+                            soil_class, general_texture, geographic, samples)
+meta <- as.data.frame(meta)
+rownames(meta) <- meta$samples
+meta <- meta[,-c(1, 7)]
+
+# convert to matrix
+asv_table_mat <- as.matrix(asv_table)
+taxonomy_mat <- as.matrix(taxo)
+
+# transform to phyloseq objects
+phylo_asv <- otu_table(asv_table, taxa_are_rows = TRUE)
+phylo_taxonomy <- tax_table(taxonomy_mat)
+phylo_sample_data <- sample_data(meta)
+phtree <- read.tree(here::here("01_data", "repseq.tree"))
+
+# combine phyloseq objects into one
+physeq <- phyloseq(phylo_asv, phylo_taxonomy, phylo_sample_data, phy_tree(phtree))
+physeq_rel <- transform_sample_counts(physeq, function(x) x / sum(x))
+phy_raref <- phyloseq_mult_raref(physeq, iter = 10, multithread = TRUE, seeds = 1:10)
+phy_raref_rel <- transform_sample_counts(phy_raref$`10`, function(x) x / sum(x))
+
+# Relative abun distribution across geographic location ------------------------
+p2 <- plot_bar(phy_raref_rel, fill = "kingdom") + 
+  geom_bar(stat = "identity", position = "fill") + 
+  scale_y_continuous(labels = percent) + 
+  facet_grid(~ geographic, scales = "free_x") +
+  scale_fill_lancet() +
+  labs(x = "Samples", y = "Relative abundance", fill = "Kingdom") +
+  guides(x =  guide_axis(angle = 30)) +
+  theme_Publication() +
+  labs(x = NULL)
+
+desired_order <- list("East", "Western center", "Southwest", "West")
+p2$data$geographic <- factor(p2$data$geographic, levels = desired_order)
+
+export_plot(p2, here::here::here::here("02_output/fig3.tiff"))
+export_plot(p2, here::here::here::here("02_output/fig3.png"), type = "png")
+
+## Shared core with venn diagram
+# Make list of aez
+aez <- unique(as.character(meta(physeq_rel)$geographic))
+list_b <- c()
+
+for (n in aez){
+  ps.sub <- subset_samples(physeq_rel, aez == n)
+  list_a <- core_members(ps.sub, detection = 0, prevalence = 0)
+  list_b[[n]] <- list_a
+}
+venn_plot <- venn(list_b)
+export_plot(plot(venn_plot), here::here("02_output", "venn.tiff"))
+export_plot(plot(venn_plot), here::here("02_output", "venn.png"), type = "png")
+
+# Alpha diversity
+bacphy <- subset_taxa(physeq, kingdom == "Bacteria")
+arcphy <- subset_taxa(physeq, kingdom == "Archaea")
+
+set.seed(1000)
+
+alpha.div.bac <- phyloseq_mult_raref_div(bacphy, parallel = T)
+saveRDS(alpha.div.bac, "alpha.div.bac.rds")
+alpha.div.bac <- readRDS("alpha.div.bac.rds")
+
+alpha.div.arc <- phyloseq_mult_raref_div(arcphy, parallel = T)
+saveRDS(alpha.div.arc, "alpha.div.arc.rds")
+alpha.div.arc <- readRDS("alpha.div.arc.rds")
+
+sam.data <- as.data.frame(physeq@sam_data)
+sam.data$Sample <- rownames(sam.data)
+alpha.div.bac$Sample[alpha.div.bac$Sample == "Koun.fao"] <- "Koun fao"
+alpha.div.bac$Sample[alpha.div.bac$Sample == "San.pedro"] <- "San pedro"
+alpha.div.arc$Sample[alpha.div.arc$Sample == "Koun.fao"] <- "Koun fao"
+alpha.div.arc$Sample[alpha.div.arc$Sample == "San.pedro"] <- "San pedro"
+alpha.div.bac <- alpha.div.bac %>%
+  left_join(sam.data, by = c("Sample" = "Sample")) %>% 
+  select(Sample, Index, Estimate, CI.lower, CI.upper, geographic)
+alpha.div.arc <- alpha.div.arc %>%
+  left_join(sam.data, by = c("Sample" = "Sample")) %>% 
+  select(Sample, Index, Estimate, CI.lower, CI.upper, geographic)
+
+alpha.div <- bind_rows(alpha.div.arc, alpha.div.bac, .id = "set")
+alpha.div <- alpha.div %>% 
+  mutate(Kingdom = case_when(set == 1 ~ "Archaea", TRUE ~ "Bacteria"))
+
+p3 <- ggplot(alpha.div, aes(x = geographic, y = Estimate, color = Kingdom)) + 
+  geom_jitter(position = position_dodge(1)) + 
+  geom_boxplot(position = position_dodge(1)) + 
+  facet_wrap(~ Index, scales = "free") + 
+  ggplot2::guides(x =  guide_axis(angle = 20)) +
+  theme_Publication() + 
+  ggsci::scale_color_lancet() +
+  labs(x = NULL, y = "Richness and Shannon index")
+
+p3$data$geographic <- factor(p3$data$geographic, levels = desired_order)
+
+export_plot(p3, here::here("02_output/fig5.tiff"))
+export_plot(p3, here::here("02_output/fig5.png"), type = "png")
+
+# Kruskal-Wallis test between regions
+res.comp.kw <- compare_means(Estimate ~ geographic, data = alpha.div, 
+                             group.by = c("Kingdom", "Index"), 
+                             method = "kruskal.test", p.adjust.method = "BH")
+res.comp.w <- compare_means(Estimate ~ geographic, data = alpha.div, 
+                            group.by = c("Kingdom", "Index"), 
+                            p.adjust.method = "BH")
+
+# RDA Analysis
+x <- dplyr::select_if(pca.data, is.numeric)
+x <- vegan::decostand(x, method = "standardize")
+y <- phyloseq:::veganifyOTU(physeq)
+y <- vegan::decostand(y, method = "hellinger")
+
+# Fitting environmental vectors/factors onto an ordination
+vegan::envfit(y ~ ., data = x)
+x <- x %>% 
+  dplyr::select(K, C, Clay_Percent, elevation, bio1, bio8)
+
+res.rda <- vegan::rda(y ~ ., data = x)
+res.rda.aov <- anova(res.rda)
+
+# Visualize RDA
+sit <- cbind(x, vegan::scores(res.rda, display = "sites"))
+sit$geographic <- sample_data(physeq)$geographic
+spp <- cbind(data.frame(tax_table(physeq)), vegan::scores(res.rda, display = "species"))
+vec <- data.frame(vegan::scores(res.rda, display = "bp"))
+adj.vec <- 2
+adj.txt <- 2.2
+p4 <- ggplot2::ggplot(sit, aes(x = RDA1, y = RDA2, color = geographic)) + 
+  ggplot2::geom_point(size = 2) + 
+  ggplot2::geom_segment(data = vec, inherit.aes = F, mapping = aes(x = 0, y = 0, xend = adj.vec * RDA1, yend = adj.vec*RDA2), arrow = arrow(length = unit(0.2, 'cm'))) + 
+  ggplot2::geom_text(data = vec, inherit.aes = F, mapping = aes(x = adj.txt*RDA1, y = adj.txt*RDA2, label = c("K", "C", "Clay_Percent", "elevation", "bio1", "bio8"))) + 
+  theme_Publication() +
+  ggsci::scale_color_lancet() +
+  ggplot2::labs(x = "RDA1 (4.64%)", y = "RDA2 (3.32%)", color = "Geographic location")
+
+export_plot(p4, here::here("02_output/fig6.tiff"))
+export_plot(p4, here::here("02_output/fig6.png"), type = "png")
+
+# Variance partitioning
+# chemical data
+chem.data <- pca.data %>% select(-starts_with("bio"), -elevation)
+clim.data <- pca.data %>% select(starts_with("bio"))
+geo.data <- pca.data %>% select(elevation)
+
+vp <-  varpart(y, chem.data, clim.data, geo.data)
+
+Cairo::Cairo("02_output/varpart.png", width = 8, height = 5, type = "png", units = "in", dpi = 300, bg = "white")
+plot(vp, Xnames = c("Edaphic", "Cimatic", "Spatial"), bg = c("seagreen3", "mediumpurple", "orange"), alpha = 80, digits = 2)
+dev.off()
+
+# Bray-Curtis dissimilarity
+bray.dis <- mult_dissim(phy_raref)
+bray.dis <- as.matrix(bray.dis)
+sub_dist <- list()
+groups_all <- sample_data(physeq_rel)$geographic
+groups_all <- as.factor(groups_all)
+
+for (group in levels(groups_all)) { 
+  row_group <- which(groups_all == group)
+  sample_group <- sample_names(physeq_rel)[row_group]
+  sub_dist[[group]] <- bray.dis[ sample_group, sample_group]
+  sub_dist[[group]][!lower.tri(sub_dist[[group]])] <- NA
+}
+
+braygroups <- reshape2::melt(sub_dist)
+df.bray <- braygroups[complete.cases(braygroups), ]
+df.bray$L1 <- factor(df.bray$L1, levels = names(sub_dist))
+
+my_comp_clusters <- list(c("East", "Southwest"), 
+                         c("East", "West"),
+                         c("East", "Western center"),
+                         c("Southwest", "West"),
+                         c("Southwest", "Western center"),
+                         c("West", "Western center"))
+
+p5 <- ggplot(df.bray, ggplot2::aes(x = L1, y = value, colour = L1)) +
+  geom_jitter() + 
+  geom_boxplot(alpha = 0.6) +  
+  scale_color_manual(values = c("East" = "#00468B", "Western center" = "#ED0000", "Southwest" = "#0099B4", "West" = "#42B540")) +
+  stat_compare_means(comparisons = my_comp_clusters, method = "wilcox.test", p.adjust.method = "BH") +
+  theme_Publication() +
+  labs(x = NULL, y = "Beta diversity per region", color = "Geographic location")
+
+p5$data$L1 <- factor(p5$data$L1, levels = desired_order)
+
+export_plot(p5, here::here("02_output", "fig7.tiff"))
+export_plot(p5, here::here("02_output/fig7.png"), type = "png")
+
+# Core microbiota
+asvs <- c("ASV_1", "ASV_2", "ASV_3", "ASV_4", "ASV_5", "ASV_6", "ASV_7", "ASV_8", "ASV_9", "ASV_10")
+phy_corel <- prune_taxa(asvs, physeq_rel)
+phycore <- prune_taxa(asvs, physeq)
+
+cbacphy <- subset_taxa(phycore, kingdom == "Bacteria")
+carcphy <- subset_taxa(phycore, kingdom == "Archaea")
+
+set.seed(47)
+alpha.div.cbac <- estimate_richness(cbacphy, measures = c("Observed", "Shannon", "Simpson"))
+alpha.div.carc <- estimate_richness(carcphy, measures = c("Observed", "Shannon", "Simpson"))
+sam.data <- as.data.frame(physeq@sam_data)
+sam.data$Sample <- rownames(sam.data)
+
+alpha.div.cbac$Sample <- rownames(alpha.div.cbac)
+alpha.div.carc$Sample <- rownames(alpha.div.carc)
+
+alpha.div.cbac$Sample[alpha.div.cbac$Sample == "Koun.fao"] <- "Koun fao"
+alpha.div.cbac$Sample[alpha.div.cbac$Sample == "San.pedro"] <- "San pedro"
+alpha.div.carc$Sample[alpha.div.carc$Sample == "Koun.fao"] <- "Koun fao"
+alpha.div.carc$Sample[alpha.div.carc$Sample == "San.pedro"] <- "San pedro"
+
+alpha.div.cbac <- alpha.div.cbac %>%
+  left_join(sam.data, by = c("Sample" = "Sample")) %>% 
+  select(Sample, Observed, Shannon, geographic)
+alpha.div.carc <- alpha.div.carc %>%
+  left_join(sam.data, by = c("Sample" = "Sample")) %>% 
+  select(Sample, Observed, Shannon, geographic)
+
+alpha.cdiv <- bind_rows(alpha.div.carc, alpha.div.cbac, .id = "set")
+alpha.cdiv <- alpha.cdiv %>% 
+  mutate(Kingdom = dplyr::case_when(set == 1 ~ "Archaea", TRUE ~ "Bacteria"))
+alpha.cdiv <- alpha.cdiv %>% 
+  pivot_longer(cols = c("Observed", "Shannon"), 
+               names_to = "Index", values_to = "Estimate")
+
+p6 <- plot_bar(phy_corel, fill = "genus") + 
+  geom_bar(stat = "identity", position = "fill") + 
+  scale_y_continuous(labels = percent) + 
+  facet_grid(~ geographic, scales = "free_x") +
+  scale_fill_lancet() +
+  labs(x = "Samples", y = "Relative abundance", fill = "Genus") +
+  guides(x =  guide_axis(angle = 30)) +
+  theme_Publication() +
+  theme(legend.text = element_text(face = "italic")) +
+  labs(x = NULL)
+
+p6$data$geographic <- factor(p6$data$geographic, levels = desired_order)
+
+export_plot(p6, here::here("02_output/fig8.tiff"))
+export_plot(p6, here::here("02_output/fig8.png"), type = "png")
+
+p7 <- ggplot(alpha.cdiv, aes(x = geographic, y = Estimate, color = Kingdom)) + 
+  geom_jitter(position = position_dodge(1)) + 
+  geom_boxplot(position = position_dodge(1)) + 
+  facet_wrap(~ Index, scales = "free") + 
+  theme_Publication() 
+
+p7$data$Geographic <- factor(p7$data$Geographic, levels = desired_order)
+
+# Test abundance of brady vs nitro
+dt <- subset_taxa(phycore, genus %in% c("Bradyrhizobium", "Nitrososphaera"))
+dt <- as.data.frame(dt@otu_table)
+dt <- t(dt)
+dt <- propr::perb(dt)
+dt <- dt@logratio
+res.cor <- cor(dt, method = "spearman")
+p.mat <- cor_pmat(res.cor)
+
+p8 <- ggcorrplot(res.cor, hc.order = TRUE,
+                             type = "lower", p.mat = p.mat, method = "circle")
+
+export_plot(p8, here::here("02_output/fig9.tiff"))
+export_plot(p8, here::here("02_output/fig9.png"), type = "png")
