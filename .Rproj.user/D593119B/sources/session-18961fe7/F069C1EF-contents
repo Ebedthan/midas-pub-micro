@@ -1,9 +1,0 @@
-data/chelsa
-data.zip
-renv/library/
-renv/local/
-renv/cellar/
-renv/lock/
-renv/python/
-renv/sandbox/
-renv/staging/
