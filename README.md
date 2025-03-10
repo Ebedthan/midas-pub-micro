@@ -2,13 +2,18 @@
 
 ### Overview
 
-We used R to analyse microbiome data. To facilitate reproducibility, `renv` package was used to bundle everything needed to reproduce results.
+We used `R` to analyse microbiome data. To facilitate reproducibility, `renv` 
+package was used to bundle everything needed to reproduce results.
 
 ### How to reproduce the results ?
 
 1.  Download the data folder
 
-The data folder was not added to GitHub (because of its size) but is publicly available on Zenodo at this link <https://doi.org/10.5281/zenodo.14989905>.
+The data folder was not added to GitHub (because of its size) but is publicly 
+available on Zenodo at this link <https://doi.org/10.5281/zenodo.14989905>.
+
+**Important**: Note that the folder in this repo is not complete and should be 
+replaced by the folder on Zenodo (that contains the CHESA tiff files) also.
 
 2.  Check you have the exact version of R used
 
