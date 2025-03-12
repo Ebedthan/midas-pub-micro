@@ -19,7 +19,7 @@ meta.new <- meta.new |> dplyr::left_join(df)
 pca.data <- meta.new |> 
   dplyr::select(id, carbon, nitrogen, c_n, bio1, bio12) |> 
   dplyr::select(-c(id)) |>
-  dplyr::rename(MAT = bio1, MAP = bio12, N = nitrogen, OrgC = carbon,
+  dplyr::rename(MAT = bio1, MAP = bio12, N = nitrogen, C = carbon,
                 `C:N`=c_n)
 
 rownames(pca.data) <- meta.new$id
@@ -77,7 +77,7 @@ desired_order <- list("Evergreen", "Semi-deciduous", "Dry")
 cn1 <- ggplot2::ggplot(cn.data, ggplot2::aes(x = phyto, y = carbon)) +
   ggplot2::geom_boxplot() +
   ggplot2::geom_jitter() +
-  ggpubr::stat_compare_means(label.y = 5) +
+  ggplot2::annotate("text", x = 1.5, y = 5, label = "paste(\"Kruskal-Wallis, \", italic(P), \" = 0.065\")", parse = TRUE) +
   theme_Publication() +
   ggplot2::labs(x = NULL, y = "Organic Carbon")
 
@@ -86,18 +86,29 @@ cn1$data$phyto <- factor(cn1$data$phyto, levels=desired_order)
 cn2 <- ggplot2::ggplot(cn.data, aes(x = phyto, y = nitrogen)) +
   ggplot2::geom_boxplot() +
   ggplot2::geom_jitter() +
-  ggpubr::stat_compare_means(method = "wilcox.test", comparisons = list(c("Evergreen", "Semi-deciduous"), c("Evergreen", "Dry"), c("Semi-deciduous", "Dry"))) +
-  ggpubr::stat_compare_means(label.y = 0.37) +
+  ggpubr::stat_compare_means(method = "wilcox.test", 
+                             comparisons = list(c("Evergreen", "Semi-deciduous"), 
+                                                c("Evergreen", "Dry"), 
+                                                c("Semi-deciduous", "Dry")), 
+                             label.y = c(0.35, 0.32, 0.29)) +
+  ggplot2::annotate("text", x = 1.5, y = 0.42, 
+                    label = "paste(\"Kruskal-Wallis, \", italic(P), \" = 0.021\")", 
+                    parse = TRUE) +
   theme_Publication() +
   ggplot2::labs(x = NULL, y = "Nitrogen")
+
 
 cn2$data$phyto <- factor(cn2$data$phyto, levels = desired_order)
 
 cn3 <- ggplot2::ggplot(cn.data, aes(x = phyto, y = cn)) +
   ggplot2::geom_boxplot() +
   ggplot2::geom_jitter() +
-  ggpubr::stat_compare_means(method = "wilcox.test", comparisons = list(c("Evergreen", "Semi-deciduous"), c("Evergreen", "Dry"), c("Semi-deciduous", "Dry"))) +
-  ggpubr::stat_compare_means(label.y = 20) +
+  ggpubr::stat_compare_means(method = "wilcox.test", 
+                             comparisons = list(c("Evergreen", "Semi-deciduous"), 
+                                                c("Evergreen", "Dry"), 
+                                                c("Semi-deciduous", "Dry")),
+                             label.y = c(17, 17.75, 18.5)) +
+  ggplot2::annotate("text", x = 1.5, y = 20, label = "paste(\"Kruskal-Wallis, \", italic(P), \" = 0.0062\")", parse = TRUE) +
   theme_Publication() +
   ggplot2::labs(x = NULL, y = "Carbon nitrogen ratio")
 
